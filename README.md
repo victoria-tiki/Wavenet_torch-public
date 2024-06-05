@@ -8,7 +8,6 @@ To get started with this project, clone the repository and install the required 
 ```
 git clone https://github.com/victoria-tiki/Wavenet_torch.git
 cd Wavenet_torch
-pip install -r requirements.txt
 ```
 
 ## Usage
