@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append('../../training_2')
  
-from custom_callbacks import *
+# from custom_callbacks import *
 # from data_generators import *
 from data_generators_gaussian import *
 from models_node import *

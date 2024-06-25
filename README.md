@@ -13,11 +13,11 @@ cd Wavenet_torch
 ## Usage
 This project includes slurm scripts for both training and inference, facilitating its use in high-performance computing environments. To train the model, execute:
 ```
-sbatch slurm_train.sh
+sbatch submitgpu.slurm
 ```
 For inference, run:
 ```
-sbatch slurm_inference.sh
+sbatch /inference/realdata/submit_inference.slurm
 ```
 Please adjust the slurm script parameters according to your specific computational environment and requirements.
 

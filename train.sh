@@ -1,0 +1,2 @@
+#!/bin/bash
+python3 train_torch.py --batch_size 32 --data_dir "/scratch/bbke/victoria/WaveNet_data/combined_spin/" --checkpoint_dir "/scratch/bbke/amatchev/training/checkpoints/" --resume_model "/scratch/bbke/amatchev/training/checkpoints/" --noise_dir "/scratch/bbke/victoria/WaveNet_data/Gaussian_Noise/" --n_channels 3 --num_workers 1 --num_nodes 1 --lr_init 0.001

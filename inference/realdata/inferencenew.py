@@ -10,7 +10,7 @@ import scipy
 from tqdm import tqdm
 
 import sys
-sys.path.append("/projects/bbke/victoria/WaveNet_training")
+sys.path.append("/u/amatchev/Wavenet_torch/")
 from models_torch import *
 from data_generators_torch import *
 
@@ -52,9 +52,9 @@ def normalize(strain):
             
 class InferenceConfig:
     batch_size = 4
-    feb_data_dir = '/projects/bbke/victoria/WaveNet_data/Feb_Events/'
-    checkpoint_dir = '/u/victoria/WaveNet_checkpoints/'
-    noise_dir = '/projects/bbke/victoria/WaveNet_data/Gaussian_Noise/'
+    feb_data_dir = '/scratch/bbke/victoria/WaveNet_data/Feb_Events/'
+    checkpoint_dir = '/u/amatchev/Wavenet_torch/checkpoints/'
+    noise_dir = '/scratch/bbke/victoria/WaveNet_data/Gaussian_Noise/'
     n_channels = 3
     length = None
 
@@ -62,7 +62,7 @@ class InferenceConfig:
 inference_args = InferenceConfig()
 
 # Load the checkpointed state_dict
-checkpoint_path = os.path.join(inference_args.checkpoint_dir, 'model_d8_nospin_epoch=06-val_loss=0.00513.ckpt')
+checkpoint_path = os.path.join(inference_args.checkpoint_dir, '2channel_epoch=29-val_loss=0.02447.ckpt')
 state_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))['state_dict'] 
 # Remove the "model." prefix from keys
 print(checkpoint_path)

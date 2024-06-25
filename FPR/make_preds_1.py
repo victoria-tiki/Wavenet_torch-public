@@ -10,7 +10,7 @@ from tensorflow.keras.optimizers import Adam, SGD, RMSprop
 from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
 from os import path, makedirs
 
-from custom_callbacks import *
+# from custom_callbacks import *
 from data_generators_gaussian import *
 import matplotlib.pyplot as plt
 

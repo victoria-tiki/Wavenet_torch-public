@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --nodes=4
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4   #match with gpus-per-node
 #SBATCH --cpus-per-task=16    # <- match to OMP_NUM_THREADS
-#SBATCH --partition=gpuA100x4      # <- or one of: cpu, gpuA100x4 gpuA40x4 gpuA100x8 gpuMI100x8
+#SBATCH --partition=gpuA40x4      # <- or one of: cpu, gpuA100x4 gpuA40x4 gpuA100x8 gpuMI100x8
 #SBATCH --account=bcdz-delta-gpu
 #SBATCH --job-name=wavenet
-#SBATCH --time=16:00:00      # hh:mm:ss for the job
+#SBATCH --time=00:10:00      # hh:mm:ss for the job
 #SBATCH --constraint="scratch"
 ### GPU options ###
 #SBATCH --gpus-per-node=4
@@ -21,8 +21,8 @@ lr_init_scaled=$(echo "0.001 * $total_gpus" | bc -l)                   #$total_g
 
 srun $(which python) train_torch.py --batch_size 32 \
                                     --data_dir "/scratch/bbke/victoria/WaveNet_data/combined_spin/" \
-                                    --checkpoint_dir "/scratch/bbke/victoria/WaveNet_training/checkpoints/" \
-                                    --resume_model "/scratch/bbke/victoria/WaveNet_training/checkpoints/" \
+                                    --checkpoint_dir "/scratch/bbke/amatchev/training/checkpoints/" \
+                                    --resume_model "/scratch/bbke/amatchev/training/checkpoints/" \
                                     --noise_dir "/scratch/bbke/victoria/WaveNet_data/Gaussian_Noise/" \
                                     --n_channels 3 \
                                     --num_workers 8 \
