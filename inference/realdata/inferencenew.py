@@ -62,7 +62,7 @@ class InferenceConfig:
 inference_args = InferenceConfig()
 
 # Load the checkpointed state_dict
-checkpoint_path = os.path.join(inference_args.checkpoint_dir, '2channel_epoch=29-val_loss=0.02447.ckpt')
+checkpoint_path = os.path.join(inference_args.checkpoint_dir, 'model_lre-3_epoch=53-val_loss=0.03264.ckpt')
 state_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))['state_dict'] 
 # Remove the "model." prefix from keys
 print(checkpoint_path)

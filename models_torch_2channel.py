@@ -68,7 +68,7 @@ class full_module(nn.Module):
     def forward(self, x):
         x_A = x[:, :, 0].view(-1, 4096, 1).permute(0,2,1)
         x_B = x[:, :, 1].view(-1, 4096, 1).permute(0,2,1)
-        x_C = x[:, :, 2].view(-1, 4096, 1).permute(0,2,1)
+        # x_C = x[:, :, 2].view(-1, 4096, 1).permute(0,2,1)
         
         x_A = self.sub_mod_A(x_A)
         x_B = self.sub_mod_B(x_B)
