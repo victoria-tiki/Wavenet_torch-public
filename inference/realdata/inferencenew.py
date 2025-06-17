@@ -10,9 +10,9 @@ import scipy
 from tqdm import tqdm
 
 import sys
-sys.path.append("/projects/bbke/victoria/WaveNet_training")
-from models_torch import *
-from data_generators_torch import *
+sys.path.append("/projects/bdoy/vsouzaramos/Wavenet_torch")
+from Wavenet_torch.models_torch_2channel import *
+from Wavenet_torch.data_generators_torch import *
 
 
 #custom sampler        
@@ -52,17 +52,17 @@ def normalize(strain):
             
 class InferenceConfig:
     batch_size = 4
-    feb_data_dir = '/projects/bbke/victoria/WaveNet_data/Feb_Events/'
-    checkpoint_dir = '/u/victoria/WaveNet_checkpoints/'
-    noise_dir = '/projects/bbke/victoria/WaveNet_data/Gaussian_Noise/'
-    n_channels = 3
+    feb_data_dir = '/projects/bbvf/victoria/WaveNet_data/Feb_Events/'
+    checkpoint_dir = '/projects/bdoy/vsouzaramos/new_WaveNet_training/checkpoints/'
+    noise_dir = '/projects/bbvf/victoria/WaveNet_data/Gaussian_Noise/'
+    n_channels = 2
     length = None
 
 # Create an instance of the configuration
 inference_args = InferenceConfig()
 
 # Load the checkpointed state_dict
-checkpoint_path = os.path.join(inference_args.checkpoint_dir, 'model_d8_nospin_epoch=06-val_loss=0.00513.ckpt')
+checkpoint_path = os.path.join(inference_args.checkpoint_dir, 'model_lre-3_epoch=233-val_loss=0.08211.ckpt')
 state_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))['state_dict'] 
 # Remove the "model." prefix from keys
 print(checkpoint_path)
@@ -81,19 +81,20 @@ model.load_state_dict(new_state_dict)
 if torch.cuda.is_available():
     model = model.to("cuda")
 
-def make_preds(whitened_L1, whitened_H1, whitened_V1, model, length=None):
+def make_preds(whitened_L1, whitened_H1, model, length=None):
     normalized_L1 = normalize(whitened_L1)
     normalized_H1 = normalize(whitened_H1)
-    normalized_V1 = normalize(whitened_V1)
+    #normalized_V1 = normalize(whitened_V1)
     if length is not None:
         whitened_L1 = torch.tensor(whitened_L1[:length])
         whitened_H1 = torch.tensor(whitened_H1[:length])
-        whitened_V1 = torch.tensor(whitened_V1[:length])
+        #whitened_V1 = torch.tensor(whitened_V1[:length])
     else:
         whitened_L1 = torch.tensor(whitened_L1)
         whitened_H1 = torch.tensor(whitened_H1)
-        whitened_V1 = torch.tensor(whitened_V1)    # Load Strain
-    data = torch.stack((whitened_L1, whitened_H1, whitened_V1), dim=1)
+        #whitened_V1 = torch.tensor(whitened_V1)    # Load Strain
+    #data = torch.stack((whitened_L1, whitened_H1, whitened_V1), dim=1)
+    data = torch.stack((whitened_L1, whitened_H1), dim=1)
 
     
     dataloader_0 = TimeSeriesDataset(data=data, targets=data, length=4096, stride=4096, start_index=0)
@@ -104,20 +105,23 @@ def make_preds(whitened_L1, whitened_H1, whitened_V1, model, length=None):
     
     model.eval()
 
+
     # Make predictions
     preds_0 = []
     for inputs in tqdm(dataloader_0, desc='Predicting 0', leave=True, disable=False):
+        inputs = torch.stack(inputs).to("cuda")
         with torch.no_grad():
-            outputs = model(inputs[0])
-            preds_0.append(outputs.detach().numpy())
+            outputs = model(inputs[0].to("cuda"))
+            preds_0.append(outputs.detach().cpu().numpy())
     preds_0 = np.concatenate(preds_0)
 
 
     preds_5 = []
     for inputs in tqdm(dataloader_5, desc='Predicting 5', leave=True, disable=False):
+        inputs = torch.stack(inputs).to("cuda")  
         with torch.no_grad():
-            outputs = model(inputs[0])
-            preds_5.append(outputs.detach().numpy())
+            outputs = model(inputs[0].to("cuda"))
+            preds_5.append(outputs.detach().cpu().numpy())
     preds_5 = np.concatenate(preds_5)
     
     preds_0,preds_5=preds_0.ravel(), preds_5.ravel()
@@ -189,34 +193,58 @@ def get_triggers(preds_0, preds_5, width, threshold, truncation=0, window_shift=
 
 
 data_dirs = sorted(glob.glob(f"{inference_args.feb_data_dir}/GW*.hdf5"))
+#data_dirs.remove("/projects/bbvf/victoria/WaveNet_data/Feb_Events/GW150914.hdf5") # added because of permission issues
 
-for threshold in [0.1,0.5,0.8,0.9]:#[0.9999]:
-    print(f"\n\n #### THRESHOLD OF {threshold} ####", flush=True)	
-    for width in [1000,2000]:#[2000]:
-        print('width: ',width, flush=True)
-        for data_dir in data_dirs:
-            print('\ndataset',data_dir.split('/')[-1].split('_')[0], flush=True)
-        
-            for i in [1]:#range(len(H1_files)):
-                
-                # Load strains
-                fp = h5py.File(data_dir, 'r')
-                strain_L1 = fp['strain_L1'][:]
-                strain_H1 = fp['strain_H1'][:]
-                strain_V1 = fp['strain_V1'][:]
-                
-                
-                # Make preds
-                start_time = time.time()
-                preds_0, preds_5 = make_preds(strain_L1, strain_H1, strain_V1, model, inference_args.length)
-                elapsed_time = time.time() - start_time
-                print(f"Time to make predictions: {elapsed_time:.2f} seconds", flush=True)
+if __name__ == "__main__":
+    for threshold in [0.1,0.5,0.8,0.9]:#[0.9999]:
+        print(f"\n\n #### THRESHOLD OF {threshold} ####", flush=True)	
+        for width in [1000,2000]:#[2000]:
+            print('width: ',width, flush=True)
+            for data_dir in data_dirs:
+                print('\ndataset',data_dir.split('/')[-1].split('_')[0], flush=True)
+            
+                for i in [1]:#range(len(H1_files)):
+                    
+                    # Load strains
+                    fp = h5py.File(data_dir, 'r')
+                    strain_L1 = fp['strain_L1'][:]
+                    strain_H1 = fp['strain_H1'][:]
+                    #strain_V1 = fp['strain_V1'][:]
+                    
+                    
+                    # Make preds
+                    start_time = time.time()
+                    #preds_0, preds_5 = make_preds(strain_L1, strain_H1, strain_V1, model, inference_args.length)
+                    preds_0, preds_5 = make_preds(strain_L1, strain_H1, model, inference_args.length)
+                    elapsed_time = time.time() - start_time
+                    print(f"Time to make predictions: {elapsed_time:.2f} seconds", flush=True)
 
-                # Post Process and find triggers
-                start_time = time.time()
-                triggers = get_triggers(preds_0, preds_5, width, threshold, truncation=0, window_shift=2048)
-                elapsed_time = time.time() - start_time
-                print(f"Time for post-processing: {elapsed_time:.2f} seconds", flush=True)    
+                    # Post Process and find triggers
+                    start_time = time.time()
+                    triggers = get_triggers(preds_0, preds_5, width, threshold, truncation=0, window_shift=2048)
+                    elapsed_time = time.time() - start_time
+                    print(f"Time for post-processing: {elapsed_time:.2f} seconds", flush=True)    
 
-                print(data_dir.split('/')[-1].split('_')[0], triggers, flush=True)
-        
+                    print(data_dir.split('/')[-1].split('_')[0], triggers, flush=True)
+
+                    # Prepare a unique identifier for filenames based on the loop parameters
+                    dataset_name = data_dir.split('/')[-1].split('_')[0]
+                    filename_identifier = f"{dataset_name}_th{threshold}_w{width}_i{i}"
+                    
+                    # Save results to HDF5 format
+                    output_dir = "/projects/bdoy/vsouzaramos/new_WaveNet_training/inference_233"
+                    if not os.path.exists(output_dir):
+                        os.makedirs(output_dir)
+                    h5_filename = os.path.join(output_dir, f"{filename_identifier}.h5")
+                    
+
+                    # convert triggers to array (compatible with h5py)
+                    triggers_array = np.array(list(triggers.values())[0], dtype='S')  # 'S' for string dtype
+
+                    with h5py.File(h5_filename, 'w') as hf:
+                        hf.create_dataset('preds_0', data=preds_0)
+                        hf.create_dataset('preds_5', data=preds_5)
+                        hf.create_dataset('triggers', data=triggers_array)
+
+                    print(f"Results saved to {h5_filename}", flush=True)
+            

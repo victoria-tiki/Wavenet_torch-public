@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 import sys
 sys.path.append("/projects/bbke/victoria/WaveNet_training")
-from models_torch import *
+from Wavenet_torch.Old_stuff.models_torch import *
 from data_generators_torch import *
 
 class TimeSeriesDataset(Dataset):

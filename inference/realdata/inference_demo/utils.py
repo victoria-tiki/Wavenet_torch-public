@@ -95,8 +95,8 @@ def plot_whitened_waveforms(wf_dataset, noise_ranges):
         plt.show()
 
 wf_dataset = WFGDataset(
-    noise_dir='/scratch/bbke/victoria/WaveNet_data/Gaussian_Noise/',
-    data_dir='/scratch/bbke/victoria/WaveNet_data/combined_spin/',
+    noise_dir='/projects/bbvf/victoria/WaveNet_data/Gaussian_Noise/',
+    data_dir='/projects/bbvf/victoria/WaveNet_data',
     batch_size=32,
     dim=4096,
     n_channels=3,
@@ -105,7 +105,7 @@ wf_dataset = WFGDataset(
     gaussian=1,  
     noise_prob=0,
     noise_range=[0.1, 0.3],  
-    initial_epoch=1
+    #initial_epoch=1
 )
 
 ########################### inference functions #####################
