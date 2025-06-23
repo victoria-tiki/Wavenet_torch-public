@@ -137,10 +137,20 @@ class TimeSeriesDataset(Dataset):
         sample_target = self.targets[start_idx:end_idx]
         return sample_data.float(), sample_target.float()
 
-def normalize(strain):
+def normalize(strain): #optional normalization (should be normalized after whitening)
     std = np.std(strain[:])
     strain[:] /= std
     return strain
+
+def butter_bandpass_filter(strain, fs=4096, lowcut=10, highcut=1000, order=4, buffer=2048): #optional filter
+    padded_strain = np.pad(strain, (buffer, buffer), mode='constant')
+    
+    nyq = 0.5 * fs
+    b, a = scipy.signal.butter(order, [lowcut / nyq, highcut / nyq], btype='band')
+    filtered = scipy.signal.filtfilt(b, a, padded_strain)
+    filtered = filtered[buffer:-buffer]
+    
+    return filtered
 
 def make_preds(whitened_L1, whitened_H1, whitened_V1, model, inference_args, dataset_name):
     device = next(model.parameters()).device
@@ -233,8 +243,10 @@ def get_triggers(preds_0, preds_5, width, threshold, truncation=0, window_shift=
     triggers_0, triggers_5 = {}, {}
     key = 'detection'
 
-    peak_0, left_0, right_0 = find_peaks(preds_0, threshold=threshold, width=[width, 3000], mean=0.95)
-    peak_5, left_5, right_5 = find_peaks(preds_5, threshold=threshold, width=[width, 3000], mean=0.95)
+    dynamic_mean = max(0, min(0.95, threshold - 0.05))
+
+    peak_0, left_0, right_0 = find_peaks(preds_0, threshold=threshold, width=[width, 3000], mean=dynamic_mean)
+    peak_5, left_5, right_5 = find_peaks(preds_5, threshold=threshold, width=[width, 3000], mean=dynamic_mean)
 
     triggers_0[key] = [(x + truncation) / 4096 for x in right_0]
     triggers_5[key] = [(x + truncation + window_shift) / 4096 for x in right_5]
