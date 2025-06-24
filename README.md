@@ -50,6 +50,11 @@ The resulting `[4096 × 2]` tensor (H1 & L1) and a binary target mask are fed to
 For each 4 096-sample window the target mask is **1** during the `dim` samples immediately *before* the merger (you can change that span via `dim` and `segment_length`) and **0** everywhere else—including pure-noise windows.  
 The network outputs a per-time-step confidence score in **[0, 1]** that is trained to match this mask.
 
+<p align="center">
+  <img src="img/processed_train_signals.png" width="650" alt="Five sample windows generated with plot_samples=True">
+</p>
+<sup>Figure 1 – Five random training windows (H1 &amp; L1) with merger region highlighted. Shows 3 boosted signals, low SNR original signal, pure noise segment </sup>
+
 ---
 
 ## 2.2  Data-Generation Modes
@@ -80,6 +85,11 @@ Two dataloaders are presented. Their behavious differs in the following ways:
   Because SNR varies abruptly between bins, you often have to co-tune the LR schedule. This does allow for fine grained control since
   we're not relying on the realistic matched filter-distribution but introduces several hyperparameters (3 for each bin) 
 
+<p align="center">
+  <img src="img/snr_histogram.png" width="500" alt="SNR distribution beforeboost">
+</p>
+<sup>Figure 2 - Example SNR histogram without boost. Most of the set is hard to learn (ultra-low snr) </sup>
+
 ---
 
 ### 3.1  Quick knobs (first things to try)
@@ -92,7 +102,7 @@ Two dataloaders are presented. Their behavious differs in the following ways:
 | `patience` (ReduceLR) | **3** | both | `LightningModel.configure_optimizers` | Tweak if LR drops too early / too late. |
 | `snr_bins` / `bin_size` | project-specific | LEGACY | build your `snr_schedule` | Finer bins = more control but tighter LR coupling. |
 
-> **Tip:** set `plot_samples=True` in `GWDataset` to save 5 example windows and visually verify any change.
+> **Tip:** set `plot_samples=True` in `GWDataset` to save 5 example windows and visually verify any change (see figure 1)
 
 ---
 
@@ -183,6 +193,11 @@ Keep these two consistent **per model checkpoint set** and **per strain set** on
 * **Output format:** `{'detection': [t₁, t₂, …]}` where times are in **seconds since file start** (`gps` is in the filename for our project).  
 * For most example strains we provide, a true signal is either centred in the file (here ≈ 1 925 s) **or** the file is pure noise.  
   Check the gps time provided in the strain filename or ask the data-prep author.
+
+<p align="center">
+<img src="img/GW170817_prediction.png" width="650" alt="Inference scores and detected peak for GW170817">
+</p>
+<sup>Figure 3 – Model scores (grey) and final trigger (red) for GW170817 (before noise removal strain, tukey window applied to large glitch).</sup>
 
 ### 4.5  Good practice
 * **Validate first, test last.** Tune `threshold` & `width` on a validation set of *synthetic + noise* segments, **not** on the true-event test files.  
