@@ -197,7 +197,7 @@ Keep these two consistent **per model checkpoint set** and **per strain set** on
 <p align="center">
 <img src="img/GW170817_prediction.png" width="650" alt="Inference scores and detected peak for GW170817">
 </p>
-<sup>Figure 3 – Model scores (grey) and final trigger (red) for GW170817 (before noise removal strain, tukey window applied to large glitch).</sup>
+<sup>Figure 3 – Strains and final trigger (green) for GW170817 (before noise removal strain, tukey window applied to large glitch).</sup>
 
 ### 4.5  Good practice
 * **Validate first, test last.** Tune `threshold` & `width` on a validation set of *synthetic + noise* segments, **not** on the true-event test files.  
