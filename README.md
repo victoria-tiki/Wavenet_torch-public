@@ -1,5 +1,7 @@
 # Wavenet Torch Implementation for Gravitational Wave Classification
 
+---
+
 ## 0  Introduction  
 This repository contains a **PyTorch / Lightning** re-implementation of the WaveNet-style classifier from *arXiv:2306.15728*, tailored for real LIGO data.  
 Key goals:
@@ -55,8 +57,6 @@ The network outputs a per-time-step confidence score in **[0, 1]** that is train
 </p>
 <sup>Figure 1 – Five random training windows (H1 &amp; L1) with merger region highlighted. Shows 3 boosted signals, low SNR original signal, pure noise segment </sup>
 
----
-
 ## 2.2  Data-Generation Modes
 Two dataloaders are presented. Their behavious differs in the following ways:
 
@@ -90,7 +90,6 @@ Two dataloaders are presented. Their behavious differs in the following ways:
 </p>
 <sup>Figure 2 - Example SNR histogram without boost. Most of the set is hard to learn (ultra-low snr) </sup>
 
----
 
 ### 3.1  Quick knobs (first things to try)
 
@@ -104,7 +103,6 @@ Two dataloaders are presented. Their behavious differs in the following ways:
 
 > **Tip:** set `plot_samples=True` in `GWDataset` to save 5 example windows and visually verify any change (see figure 1)
 
----
 
 ### 3.2  Other knobs (tune after the quick ones)
 
@@ -116,7 +114,6 @@ Two dataloaders are presented. Their behavious differs in the following ways:
 | `new_lr` | `5e-4` | both | same callback | < initial LR → conservative late training; ≥ initial LR → aggressive fine-tuning on hard samples. |
 | `bandpass` | 10 – 1000 Hz | both | butter filter in `GWDataset` | Advanced: tighten to 20 – 800 Hz to test robustness vs. PSD mismatch. |
 
----
 
 ### 3.3  SNR boost formula (NEW loader, for reference)
 
@@ -204,6 +201,8 @@ Keep these two consistent **per model checkpoint set** and **per strain set** on
 * **Consistent settings.** Use the same peak-finding parameters for all checkpoints you compare.  
 * **One change at a time.** Adjust `threshold` → re-plot ROC, then maybe tweak `width`, etc.—avoids chasing moving targets.
 
+---
+
 ### 5. Data
 
 <sup>*Large data files required for training and inference are not stored in-repo; download or generate locally.*</sup>
@@ -224,7 +223,14 @@ fs  = 4096            # sample rate in Hz
 
 strain_L1 = TimeSeries.fetch_open_data('L1', gps, gps + dur, sample_rate=fs)
 strain_H1 = TimeSeries.fetch_open_data('H1', gps, gps + dur, sample_rate=fs)
+
 ```
+
+---
+
+### 6. Checkpoints
+
+Checkpoints trained for BBH (validated on month long February 2020 LIGO data) and BNS detection (validated on hour long August 2017 LIGO data) can be found under /checkpoints. For now, these have only been validated on a small dataset, so should only be used for further testing or proof-of-concept. 
 
 
 
