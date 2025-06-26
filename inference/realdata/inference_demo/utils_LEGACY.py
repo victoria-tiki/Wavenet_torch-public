@@ -1,7 +1,6 @@
 import numpy as np
 import time
 import os
-import gc
 
 import torch
 import torch.nn as nn
@@ -24,7 +23,7 @@ warnings.filterwarnings("ignore", message="nn.functional.tanh is deprecated. Use
 warnings.filterwarnings("ignore", message="nn.functional.sigmoid is deprecated. Use torch.sigmoid instead.")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-sys.path.append("/projects/bbvf/victoria/WaveNet_training/2-channel")
+sys.path.append("/scratch/bbke/victoria/WaveNet_training/2-channel")
 
 from models_torch import *
 from data_generators_torch import *
@@ -96,8 +95,8 @@ def plot_whitened_waveforms(wf_dataset, noise_ranges):
         plt.show()
 
 wf_dataset = WFGDataset(
-    noise_dir='/projects/bbvf/victoria/WaveNet_data/Gaussian_Noise/',
-    data_dir='/projects/bbvf/victoria/WaveNet_data/combined_spin/',
+    noise_dir='/scratch/bbke/victoria/WaveNet_data/Gaussian_Noise/',
+    data_dir='/scratch/bbke/victoria/WaveNet_data/combined_spin/',
     batch_size=32,
     dim=4096,
     n_channels=3,
@@ -106,7 +105,7 @@ wf_dataset = WFGDataset(
     gaussian=1,  
     noise_prob=0,
     noise_range=[0.1, 0.3],  
-    #initial_epoch=1
+    initial_epoch=1
 )
 
 ########################### inference functions #####################
@@ -138,15 +137,13 @@ class TimeSeriesDataset(Dataset):
         sample_target = self.targets[start_idx:end_idx]
         return sample_data.float(), sample_target.float()
 
-def normalize(strain):
+def normalize(strain): #optional normalization (should be normalized after whitening)
     std = np.std(strain[:])
-    mean=np.mean(strain[:])
-    strain[:]+=-mean
     strain[:] /= std
     return strain
 
-def butter_bandpass_filter(strain, fs=4096, lowcut=10, highcut=1000, order=4, buffer=2048):
-    padded_strain = strain#np.pad(strain, (buffer, buffer), mode='constant')
+def butter_bandpass_filter(strain, fs=4096, lowcut=10, highcut=1000, order=4, buffer=2048): #optional filter
+    padded_strain = np.pad(strain, (buffer, buffer), mode='constant')
     
     nyq = 0.5 * fs
     b, a = scipy.signal.butter(order, [lowcut / nyq, highcut / nyq], btype='band')
@@ -155,9 +152,57 @@ def butter_bandpass_filter(strain, fs=4096, lowcut=10, highcut=1000, order=4, bu
     
     return filtered
 
+def make_preds(whitened_L1, whitened_H1, whitened_V1, model, inference_args, dataset_name):
+    device = next(model.parameters()).device
+    
+    def _make_single_pred(dataloader, position,disable_bar):
+        preds = []
+        pbar = tqdm(dataloader, desc=f'Predicting for {dataset_name}', leave=True, position=position, dynamic_ncols=True, disable=disable_bar)
+        for i, inputs in enumerate(pbar):
+            with torch.no_grad():
+                inputs = inputs[0].to(device)  # Move inputs to GPU
+                outputs = model(inputs)
+                preds.append(outputs.detach().cpu().numpy())  # Move outputs back to CPU
+            pbar.update()
+        return np.concatenate(preds).ravel()
+
+    normalized_L1 = normalize(whitened_L1)
+    normalized_H1 = normalize(whitened_H1)
+    normalized_V1 = normalize(whitened_V1)
+
+    if inference_args.length is not None:
+        whitened_L1 = torch.tensor(whitened_L1[:length])
+        whitened_H1 = torch.tensor(whitened_H1[:length])
+        whitened_V1 = torch.tensor(whitened_V1[:length])
+    else:
+        whitened_L1 = torch.tensor(whitened_L1)
+        whitened_H1 = torch.tensor(whitened_H1)
+        whitened_V1 = torch.tensor(whitened_V1)
+
+    data = torch.stack((whitened_L1, whitened_H1, whitened_V1), dim=1).to(device)  # Move data to GPU
+
+    dataloader_0 = TimeSeriesDataset(data=data, targets=data, length=4096, stride=4096, start_index=0)
+    dataloader_5 = TimeSeriesDataset(data=data, targets=data, length=4096, stride=4096, start_index=2047)
+
+    dataloader_0 = DataLoader(dataloader_0, batch_size=inference_args.batch_size, shuffle=False)
+    dataloader_5 = DataLoader(dataloader_5, batch_size=inference_args.batch_size, shuffle=False)
+
+    model.eval()
+    
+    disable_bar_0 = False if device == torch.device('cuda:0') or device == torch.device('cuda') else True
+    disable_bar_5 = True
+
+    with ThreadPoolExecutor(max_workers=8) as executor:  # Allocate 10 workers for inner level
+        future_preds_0 = executor.submit(_make_single_pred, dataloader_0, 0, disable_bar_0)
+        future_preds_5 = executor.submit(_make_single_pred, dataloader_5, 1, disable_bar_5)
+
+        preds_0 = future_preds_0.result()
+        preds_5 = future_preds_5.result()
+
+    return preds_0, preds_5
 
 # Function to find peaks
-def find_peaks(preds, threshold=0.9, width=1000, mean=0.9):
+def find_peaks(preds, threshold=0.9, width=[1500, 3000], mean=0.9):
     test_p = preds
     peaks, properties = signal.find_peaks(test_p, height=threshold, width=width, distance=4096 * 1)
     left = properties['left_ips']
@@ -167,12 +212,11 @@ def find_peaks(preds, threshold=0.9, width=1000, mean=0.9):
     f_right = []
     for i in range(len(left)):
         sliced = test_p[int(left[i]):int(right[i])]
-        if (np.mean(sliced > mean) > 0.5):
+        if (np.mean(sliced > mean) > mean):
             f_left.append(int(left[i]))
             f_right.append(int(right[i]))
 
     return peaks, f_left, f_right
-
 
 # Function to merge windows
 def merge_windows(triggers_0, triggers_5):
@@ -194,116 +238,44 @@ def merge_windows(triggers_0, triggers_5):
 
     return triggers
 
-def make_preds(whitened_L1, whitened_H1, whitened_V1, model, inference_args,
-               dataset_name):
-    device = next(model.parameters()).device
+# Convert right ips to GPS times and merge the two windows
+def get_triggers(preds_0, preds_5, width, threshold, truncation=0, window_shift=2048):
+    triggers_0, triggers_5 = {}, {}
+    key = 'detection'
 
-    offsets = [0,
-               2047 // 2,                # 1 023   ≈ 0.25 s
-               2047,                     # 2 047   ≈ 0.50 s  
-               2047 + 2047 // 2]         # 3 070   ≈ 0.75 s
-
-    # run a single dataloader through the network
-    def _single_pred(dataloader, bar_pos, disable_bar):
-        preds = []
-        pbar = tqdm(dataloader, leave=True, position=bar_pos,
-                    desc=f'Predicting {dataset_name}[{bar_pos}]',
-                    dynamic_ncols=True, disable=disable_bar)
-        for batch in pbar:
-            with torch.no_grad():
-                batch = batch[0].to(device)
-                preds.append(model(batch).cpu().numpy())
-        return np.concatenate(preds).ravel() if preds else np.empty(0)
-
-    # ── normalise & tensor-ise input ───────────────────────────────────────────
-    n = min(len(whitened_L1), len(whitened_H1), len(whitened_V1))
-    whitened_L1, whitened_H1, whitened_V1 = (
-        torch.tensor(normalize(x[:n]).copy(), dtype=torch.float32)
-        for x in (whitened_L1, whitened_H1, whitened_V1)
-    )
-    data = torch.stack((whitened_L1, whitened_H1, whitened_V1), dim=1).to(device)
-
-    # ── build dataloaders for all offsets ──────────────────────────────────────
-    loaders = [
-        DataLoader(
-            TimeSeriesDataset(data, data, length=4096, stride=4096,
-                              start_index=off),
-            batch_size=inference_args.batch_size, shuffle=False)
-        for off in offsets
-    ]
-
-    # ── run the model in parallel ──────────────────────────────────────────────
-    disable_bars = [False] + [True] * (len(loaders) - 1)
-    with ThreadPoolExecutor(max_workers=len(loaders)) as pool:
-        futures = [
-            pool.submit(_single_pred, dl, i, dis)
-            for i, (dl, dis) in enumerate(zip(loaders, disable_bars))
-        ]
-    preds = [f.result() for f in futures]   
-
-    gc.collect()
-    torch.cuda.empty_cache()
-    return preds, offsets
-
-
-def get_triggers(preds_list, offsets, width, threshold,
-                 truncation=0, fs=4096):
-    """
-    Returns {'detection': [t₁, t₂, …]} where each tᵢ is in *seconds*.
-    Duplicate triggers arising from overlapping windows are merged
-    if they lie closer than 0.25 s (one quarter-window) to a previous one.
-    """
-    assert len(preds_list) == len(offsets)
-
-    all_triggers = []
     dynamic_mean = max(0, min(0.95, threshold - 0.05))
 
-    for preds, off in zip(preds_list, offsets):
-        _, _, right = find_peaks(preds,
-                                 threshold=threshold,
-                                 width=width,
-                                 mean=dynamic_mean)
-        # convert sample indices to seconds and apply offset
-        all_triggers.extend([(r + truncation + off) / fs for r in right])
+    peak_0, left_0, right_0 = find_peaks(preds_0, threshold=threshold, width=[width, 3000], mean=dynamic_mean)
+    peak_5, left_5, right_5 = find_peaks(preds_5, threshold=threshold, width=[width, 3000], mean=dynamic_mean)
 
-    # ── remove duplicates from different windows within 1/4 s  ─────────────
-    all_triggers = sorted(all_triggers)
-    merged = []
-    for t in all_triggers:
-        if not merged or t - merged[-1] > 0.25:
-            merged.append(t)
+    triggers_0[key] = [(x + truncation) / 4096 for x in right_0]
+    triggers_5[key] = [(x + truncation + window_shift) / 4096 for x in right_5]
 
-    return {'detection': merged}
+    # Merge the two windows
+    triggers = merge_windows(triggers_0, triggers_5)
 
+    return triggers
 
 def process_data(data_dir, model, threshold, width, inference_args):
-    dataset_name = os.path.splitext(os.path.basename(data_dir))[0]
+    dataset_name=data_dir.split('/')[-1].split('_')[0]
+    for i in [1]:
+        # Load strains
+        with h5py.File(data_dir, 'r') as fp:
+            strain_L1 = fp['strain_L1'][:]
+            strain_H1 = fp['strain_H1'][:]
+            strain_V1 = fp['strain_V1'][:]
 
-    with h5py.File(data_dir, 'r') as fp:
-        strain_L1 = fp['strain_L1'][:]
-        strain_H1 = fp['strain_H1'][:]
-        strain_V1 = fp['strain_L1'][:]              
+        # Make preds
+        start_time = time.time()
+        preds_0, preds_5 = make_preds(strain_L1, strain_H1, strain_V1, model, inference_args, dataset_name)
+        elapsed_time = time.time() - start_time
 
-    n = min(len(strain_L1), len(strain_H1), len(strain_V1))
-    strain_L1, strain_H1, strain_V1 = (x[:n] for x in (strain_L1,
-                                                       strain_H1,
-                                                       strain_V1))
+        # Post Process and find triggers
+        start_time = time.time()
+        triggers = get_triggers(preds_0, preds_5, width, threshold, truncation=0, window_shift=2048)
+        elapsed_time = time.time() - start_time
 
-    # ── inference ─────────────────────────────────────────────────────────────
-    t0 = time.time()
-    preds_list, offsets = make_preds(strain_L1, strain_H1, strain_V1,
-                                     model, inference_args, dataset_name)
-    print(f'Inference   ↯ {time.time() - t0:.1f}s')
-
-    # ── peak finding / trigger extraction ─────────────────────────────────────
-    t0 = time.time()
-    triggers = get_triggers(preds_list, offsets, width, threshold,
-                            truncation=0)
-    print(f'Postprocess ↯ {time.time() - t0:.1f}s')
-
-    gc.collect()
-    torch.cuda.empty_cache()
-    return dataset_name, triggers, strain_L1, strain_H1, strain_V1
+        return dataset_name, triggers, strain_L1, strain_H1, strain_V1
 
     
 ######################## process and plot triggers ################################################
@@ -314,7 +286,7 @@ def tolerant_intersection(*trigger_lists, tolerance=1):
         common_triggers = {trigger for trigger in common_triggers if any(np.isclose(trigger, t, atol=tolerance) for t in triggers)}
     return list(common_triggers)
 
-def process_triggers(dataset_name_to_dir, dataset_triggers, models, tolerance=0.05, plot=True):
+def process_triggers(dataset_name_to_dir, dataset_triggers, models, tolerance=0.05):
     common_triggers_count = 0
     common_triggers_info = {}
     
@@ -324,42 +296,28 @@ def process_triggers(dataset_name_to_dir, dataset_triggers, models, tolerance=0.
             common_triggers = tolerant_intersection(*trigger_lists, tolerance=tolerance)
             
             for trigger in common_triggers:
-                if 1923 <= trigger <= 1927:
+                if 1921 <= trigger <= 1930:
                     common_triggers_count += 1
             
             common_triggers_info[dataset_name] = common_triggers
             
-            if plot:
-                data_dir = dataset_name_to_dir[dataset_name]
-                with h5py.File(data_dir, 'r') as fp:
-                    strain_L1 = fp['strain_L1'][:]
-                    strain_H1 = fp['strain_H1'][:]
-                    strain_V1 = fp['strain_L1'][:]
-                    
-                    min_length = min(len(strain_L1), len(strain_H1))
-                    strain_L1 = strain_L1[:min_length]
-                    strain_H1 = strain_H1[:min_length]
-                    strain_V1 = strain_V1[:min_length]
-                    
-                plot_results(dataset_name, strain_L1, strain_H1, strain_V1, common_triggers, save_path=f'{dataset_name}.png')
+            data_dir = dataset_name_to_dir[dataset_name]
+            with h5py.File(data_dir, 'r') as fp:
+                strain_L1 = fp['strain_L1'][:]
+                strain_H1 = fp['strain_H1'][:]
+                strain_V1 = fp['strain_V1'][:]
+            plot_results(dataset_name, strain_L1, strain_H1, strain_V1, common_triggers, save_path=f'{dataset_name}.png')
     
     return common_triggers_info, common_triggers_count
 
 
             
 def plot_results(dataset_name, strain_L1, strain_H1, strain_V1, common_triggers, save_path=None, demo=0):
-    strain_L1=normalize(strain_L1)
-    strain_H1=normalize(strain_H1)
-    strain_V1=normalize(strain_V1)
     plt.figure()
-    fig, axs = plt.subplots(3, 1, figsize=(10, 14))
+    fig, axs = plt.subplots(4, 1, figsize=(10, 14))
     
     x_vals = np.arange(len(strain_L1)) / 4096
-    merger_time=np.size(strain_L1)//2//4096
-    print('ground truth merger time:',merger_time)
-    
 
-    
     axs[0].plot(x_vals[::4], strain_L1[::4], label='Livingston (L1)')
     axs[0].set_title('Livingston (L1)')
     axs[0].set_ylim([-7, 7])
@@ -370,13 +328,17 @@ def plot_results(dataset_name, strain_L1, strain_H1, strain_V1, common_triggers,
     axs[1].set_ylim([-7, 7])
     axs[1].legend(loc='upper right')
 
-
-    axs[2].plot(x_vals[::4], np.zeros_like(x_vals[::4]))
-    axs[2].axvline(x=merger_time, color='r', linestyle='-', ymin=0.25, ymax=0.75, label='True Signal', linewidth=4)
-    for trigger in common_triggers:
-        axs[2].axvline(x=trigger, color='g', linestyle='--', ymin=0.0, ymax=1.0, label='Predicted Signal' if trigger == common_triggers[0] else "")
-    axs[2].set_title('Predicted Signals')
+    axs[2].plot(x_vals[::4], strain_V1[::4], label='Virgo (V1)')
+    axs[2].set_title('Virgo (V1)')
+    axs[2].set_ylim([-7, 7])
     axs[2].legend(loc='upper right')
+
+    axs[3].plot(x_vals[::4], np.zeros_like(x_vals[::4]))
+    axs[3].axvline(x=1925, color='r', linestyle='-', ymin=0.25, ymax=0.75, label='True Signal', linewidth=4)
+    for trigger in common_triggers:
+        axs[3].axvline(x=trigger, color='g', linestyle='--', ymin=0.0, ymax=1.0, label='Predicted Signal' if trigger == common_triggers[0] else "")
+    axs[3].set_title('Predicted Signals')
+    axs[3].legend(loc='upper right')
 
     if demo == 1:
         fig.suptitle(f'Dataset: {dataset_name}, (no ensemble averaging)', fontsize=16)

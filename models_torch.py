@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-print("new_models_torch: defining SubModule")
 class SubModule(nn.Module):
     def __init__(self, inp_shape=(4096, 1)):
         super(SubModule, self).__init__()
@@ -35,7 +34,6 @@ class SubModule(nn.Module):
         out = F.relu(torch.sum(torch.stack(skips), dim=0))
         return out
         
-print("new_models_torch: defining PinSage")
 class PinSage(nn.Module):
     def __init__(self, dim, node_dim):
         super(PinSage, self).__init__()
@@ -57,7 +55,7 @@ class PinSage(nn.Module):
         out_node = F.relu(self.update_target_node(out_node.permute(0,2,1)))
         return out_node
 
-print("new_models_torch: defining PinSage attention")
+
 class PinSage_Attn(nn.Module):
     def __init__(self, dummy, dummy1, convolution_dim=16, num_heads=1):
         super().__init__()
@@ -105,7 +103,6 @@ class PinSage_Attn(nn.Module):
         output = updated_node.permute(0, 2, 1)  # (batch_size, convolution_dim, seq_len)
         return output
 
-print("new_models_torch: defining full module")
 class full_module(nn.Module):
     def __init__(self):
         super(full_module, self).__init__()
@@ -122,7 +119,7 @@ class full_module(nn.Module):
     def forward(self, x):
         x_A = x[:, :, 0].view(-1, 4096, 1).permute(0,2,1)
         x_B = x[:, :, 1].view(-1, 4096, 1).permute(0,2,1)
-        #x_C = x[:, :, 2].view(-1, 4096, 1).permute(0,2,1)
+        x_C = x[:, :, 2].view(-1, 4096, 1).permute(0,2,1)
         
         x_A = self.sub_mod_A(x_A)
         x_B = self.sub_mod_B(x_B)
