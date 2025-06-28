@@ -70,7 +70,7 @@ Two dataloaders are presented. Their behavious differs in the following ways:
 | **Band-pass filtering**   | Built-in Butterworth (default **10–1000 Hz**) applied **after** whitening to remove artifacts. 10-1000 Hz keeps it closer to LIGO processing| Assumes data are already whitened & filtered; no extra band-pass inside the loader |
 ---
 
-## 3  Hyper-parameter Guide – “What to tweak & why”
+## 3  Hyper-parameter Guide 
 
 ### 3.0  How the two data-loaders handle SNR
 
@@ -91,7 +91,7 @@ Two dataloaders are presented. Their behavious differs in the following ways:
 <sup>Figure 2 - Example SNR histogram without boost. Most of the set is hard to learn (ultra-low snr) </sup>
 
 
-### 3.1  Quick knobs (first things to try)
+### 3.1  Quick knobs 
 
 | Parameter | Default | Loader | Where to change | Why / when to change |
 |-----------|---------|--------|-----------------|----------------------|
@@ -104,7 +104,7 @@ Two dataloaders are presented. Their behavious differs in the following ways:
 > **Tip:** set `plot_samples=True` in `GWDataset` to save 5 example windows and visually verify any change (see figure 1)
 
 
-### 3.2  Other knobs (tune after the quick ones)
+### 3.2  Other knobs 
 
 | Parameter | Default | Loader | Where to change | Why / when to change |
 |-----------|---------|--------|-----------------|----------------------|
@@ -115,15 +115,6 @@ Two dataloaders are presented. Their behavious differs in the following ways:
 | `bandpass` | 10 – 1000 Hz | both | butter filter in `GWDataset` | Advanced: tighten to 20 – 800 Hz to test robustness vs. PSD mismatch. |
 
 
-### 3.3  SNR boost formula (NEW loader, for reference)
-
-```python
-# GWDataset.__init__
-tau = -decay_epochs / np.log(p_higher_fin / p_higher_init)
-p_higher(epoch) = p_higher_init * exp(-epoch / tau)
-```
-
-τ is **derived**; you only set `p_higher_*` and `decay_epochs`.
 
 ### 3.4 Training workflow suggestion
 1. **Start** with loader defaults and a *very high* `reset_epoch` (essentially disabling LR-reset).  
@@ -136,8 +127,6 @@ Feel free to experiment as you get a better feel for the behaviour of the networ
 > • Tune every hyper-parameter **only on the validation set** (eg synthetic signals + real noise).  
 > • Once satisfied, evaluate once on the **held-out test set** (eg true events) to avoid data leakage.  
 > • Make sure the PSD and noise statistics used in validation **match** those expected for the test data; mismatched noise can hide generalisation issues.
-
-Happy tuning!
 
 
 ## 4. Inference Guide for true signals
@@ -176,7 +165,7 @@ Run the provided notebook to run inference on true LIGO signals. The following t
 
 Keep these two consistent **per model checkpoint set** and **per strain set** once chosen; changing them mid-analysis invalidates validation metrics.
 
-### 4.3  Secondary knobs (touch sparingly)
+### 4.3  Secondary knobs 
 
 | Parameter | Default | Location | Why / when to touch |
 |------|---------|----------|---------------------|
