@@ -5,7 +5,7 @@
 #SBATCH --partition=ghx4      # <- or one of: cpu, gpuA100x4 gpuA40x4 gpuA100x8 gpuMI100x8
 #SBATCH --account=begd-dtai-gh
 #SBATCH --job-name=pre_hyperparameter_tuning  # Name of the job
-#SBATCH --time=20:00:00      # hh:mm:ss for the job
+#SBATCH --time=16:00:00      # hh:mm:ss for the job
 ##SBATCH --constraint="scratch"
 ### GPU options ###
 #SBATCH --gpus-per-node=4
@@ -32,8 +32,8 @@ total_gpus=$(($SLURM_JOB_NUM_NODES * $SLURM_GPUS_PER_NODE))
 lr_init_scaled=$(echo "0.001 * $total_gpus" | bc -l)  #$total_gpus gives the number of gpus in case lr scaling is desired
 
 srun $(which python) train_torch.py --batch_size 32 \
-                                    --data_dir "/projects/bdoy/vsouzaramos/data/kiet_data" \
-                                    --noise_dir '/work/hdd/bdao/victoria/WaveNet_data' \
+                                    --data_dir "/projects/begd/vsouzaramos/new_data/data_highmass" \
+                                    --noise_dir '/projects/begd/vsouzaramos/new_data/processed_noise/' \
                                     --checkpoint_dir "${RUN_DIR}/checkpoints" \
                                     --resume_model "${RUN_DIR}/checkpoints" \
                                     --n_channels 2 \
