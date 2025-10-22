@@ -5,7 +5,7 @@
 #SBATCH --partition=ghx4
 #SBATCH --account=begd-dtai-gh
 #SBATCH --job-name=HP_optim
-#SBATCH --time=16:00:00      # hh:mm:ss for the job
+#SBATCH --time=24:00:00      # hh:mm:ss for the job
 ##SBATCH --constraint="scratch"
 ### GPU options ###
 #SBATCH --gpus-per-node=4
