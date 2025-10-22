@@ -16,7 +16,7 @@
 # --------- Create timestamped output directory ----------
 START_TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 RUN_DIR="output_files/run_${START_TIMESTAMP}"
-mkdir -p "$RUN_DIR"
+mkdir -p "${RUN_DIR}/checkpoints"
 
 # --------- Redirect stdout and stderr to log file -------
 exec > >(tee -a "${RUN_DIR}/slurm-dtai-${SLURM_JOB_ID}.out") 2>&1
@@ -35,11 +35,12 @@ lr_init_scaled=$(echo "0.001 * $total_gpus" | bc -l)                   #$total_g
 
 srun $(which python) train_torch.py --batch_size 32 \
                                     --data_dir "/work/nvme/begd/vsouzaramos/low_mass" \
-                                    --checkpoint_dir "/projects/bdoy/vsouzaramos/final_dataset_validation/Wavenet_torch/" \
+                                    --checkpoint_dir "$RUN_DIR" \
                                     --noise_dir "/projects/begd/vsouzaramos/new_data/processed_noise/" \
                                     --num_workers 8 \
                                     --num_nodes $SLURM_JOB_NUM_NODES \
-                                    --lr_init 0.001
+                                    --lr_init 0.001 \
+                                    --run_dir "$RUN_DIR" \
 
 END_TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 echo "Job ended at $END_TIMESTAMP"
