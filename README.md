@@ -1,3 +1,10 @@
+
+<p style="color:red;">
+<b>Note:</b> The <code>train_torch.py</code> and <code>data_generators_torch.py</code> scripts have been intentionally removed from this public mirror pending project completion and publication. This repository retains all non-sensitive components for demonstration and documentation purposes, including trained models and inference scripts.
+</p>
+
+
+
 # Wavenet Torch Implementation for Gravitational Wave Classification
 
 ---
